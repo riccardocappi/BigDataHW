@@ -34,10 +34,6 @@ def exactOutliers(points, distance, M, K=10):
     outliers = [point for point, count in zip(points, inside_points) if count < M]
     print(outliers)
 
-points = readinput("TestN15-input.txt")
-
-exactOutliers(points, 1, 3, 10)
-
 
 '''
 2) Write a method/function MRApproxOutliers which implements the above approximate algorithm. Specifically, 
@@ -55,8 +51,11 @@ For the first 𝐾
 non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers and value of |𝑁3(𝐶)|, one line per cell. (If there are less than 𝐾 non-empty cells, it prints the information for all of them.)
 '''
 
+
 def approximate_outliers():
     pass
 
 
-
+if __name__ == "__main__":
+    points = readinput("TestN15-input.txt")
+    exactOutliers(points, 1, 3, 10)
