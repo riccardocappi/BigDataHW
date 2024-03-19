@@ -55,5 +55,8 @@ For the first 𝐾
 non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers and value of |𝑁3(𝐶)|, one line per cell. (If there are less than 𝐾 non-empty cells, it prints the information for all of them.)
 '''
 
+def approximate_outliers():
+    pass
+
 
 
