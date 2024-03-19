@@ -1,3 +1,4 @@
+from pyspark import SparkContext, SparkConf
 '''
 1) Write a method/function ExactOutliers which implements the Exact algorithm,
 through standard sequential code which does not use RDDs.  Specifically, ExactOutliers
@@ -9,6 +10,7 @@ The first 𝐾
 outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point per line. (If there are less than 𝐾 outlier, it prints all of them.)
 
 '''
+import math
 from math import hypot
 
 def readinput(filename):
@@ -52,10 +54,51 @@ non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers an
 '''
 
 
-def approximate_outliers():
-    pass
+def map_point(str_x, l):
+    point_x, point_y = str_x.split(",")
+    point = ((float(point_x)//l, float(point_y)//l), 1)
+    return point
+
+def comp_neighbors(point):
+    x, y = point[0][0], point[0][1]
+    count = point[1]
+    neighbors = []
+    for i in range(-3, 4):
+        for j in range(-3, 4):
+            if abs(i) >= 2 or abs(j) >= 2:
+                n3 = 0
+            else:
+                n3 = 1
+            neighbors.append(((x+i, y+j), (count*n3, count)))
+    return neighbors
+
+def gather_sums(x):
+    tot_n3 = 0
+    tot_n7 = 0
+    for p in x:
+        tot_n3 += p[0]
+        tot_n7 += p[1]
+    return tot_n3, tot_n7
+
+
+def MRApproxOutliers(points, D, M, K):
+    l = D/(2 * math.sqrt(2))
+    mapped_points = (((points.map(lambda x: map_point(x, l)) # Round 1
+                     .groupByKey()
+                     .mapValues(lambda vals: sum(vals)))
+                     .flatMap(comp_neighbors)) #Round 2
+                     .groupByKey()
+                     .mapValues(gather_sums))
+    print(mapped_points.collect())
 
 
 if __name__ == "__main__":
-    points = readinput("TestN15-input.txt")
-    exactOutliers(points, 1, 3, 10)
+    # points = readinput("TestN15-input.txt")
+    # exactOutliers(points, 1, 3, 10)
+    conf = SparkConf().setAppName('HW1')
+    sc = SparkContext(conf=conf)
+
+    K = 5
+    points = sc.textFile("TestN15-input.txt").repartition(K).cache()
+    MRApproxOutliers(points, 1,1,1)
+
