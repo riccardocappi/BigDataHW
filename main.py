@@ -61,14 +61,14 @@ def map_point(str_x, l):
     return point
 
 
-def gather_partitions(pairs):
-    pairs_dict = {}
-    for point in pairs[1]:
-        if point not in pairs_dict:
-            pairs_dict[point] = 1
+def gather_partitions(points):
+    points_dict = {}
+    for point in points:
+        if point not in points_dict:
+            points_dict[point] = 1
         else:
-            pairs_dict[point] += 1
-    return [(key, pairs_dict[key]) for key in pairs_dict.keys()]
+            points_dict[point] += 1
+    return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
 def comp_neighbors(point):
@@ -94,13 +94,12 @@ def gather_sums(x):
     return tot_n3, tot_n7
 
 
-def MRApproxOutliers(points, D, M, K, l=3):
+def MRApproxOutliers(points, D, M, K):
     mapped_points = (((points.map(lambda x: map_point(x, D/(2 * math.sqrt(2)))) # Round 1
-                     .groupBy(lambda x: (rand.randint(0,l-1)))
-                     .flatMap(gather_partitions)
+                     .mapPartitions(gather_partitions)
                      .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals)))
-                     .flatMap(comp_neighbors))
+                     .flatMap(comp_neighbors)) # Round 3
                      .groupByKey()
                      .mapValues(gather_sums))
     print(mapped_points.collect())
