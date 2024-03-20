@@ -12,6 +12,7 @@ outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point 
 '''
 import math
 from math import hypot
+import random as rand
 
 def readinput(filename):
     file = open(filename)
@@ -56,8 +57,19 @@ non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers an
 
 def map_point(str_x, l):
     point_x, point_y = str_x.split(",")
-    point = ((float(point_x)//l, float(point_y)//l), 1)
+    point = (float(point_x)//l, float(point_y)//l)
     return point
+
+
+def gather_partitions(pairs):
+    pairs_dict = {}
+    for point in pairs[1]:
+        if point not in pairs_dict:
+            pairs_dict[point] = 1
+        else:
+            pairs_dict[point] += 1
+    return [(key, pairs_dict[key]) for key in pairs_dict.keys()]
+
 
 def comp_neighbors(point):
     x, y = point[0][0], point[0][1]
@@ -72,6 +84,7 @@ def comp_neighbors(point):
             neighbors.append(((x+i, y+j), (count*n3, count)))
     return neighbors
 
+
 def gather_sums(x):
     tot_n3 = 0
     tot_n7 = 0
@@ -81,12 +94,13 @@ def gather_sums(x):
     return tot_n3, tot_n7
 
 
-def MRApproxOutliers(points, D, M, K):
-    l = D/(2 * math.sqrt(2))
-    mapped_points = (((points.map(lambda x: map_point(x, l)) # Round 1
-                     .groupByKey()
+def MRApproxOutliers(points, D, M, K, l=3):
+    mapped_points = (((points.map(lambda x: map_point(x, D/(2 * math.sqrt(2)))) # Round 1
+                     .groupBy(lambda x: (rand.randint(0,l-1)))
+                     .flatMap(gather_partitions)
+                     .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals)))
-                     .flatMap(comp_neighbors)) #Round 2
+                     .flatMap(comp_neighbors))
                      .groupByKey()
                      .mapValues(gather_sums))
     print(mapped_points.collect())
