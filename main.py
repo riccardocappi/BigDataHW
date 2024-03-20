@@ -12,7 +12,6 @@ outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point 
 '''
 import math
 from math import hypot
-import random as rand
 
 def readinput(filename):
     file = open(filename)
