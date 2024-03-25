@@ -1,3 +1,4 @@
+
 from pyspark import SparkContext, SparkConf
 '''
 1) Write a method/function ExactOutliers which implements the Exact algorithm,
@@ -70,38 +71,33 @@ def gather_partitions(points):
     return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
-def comp_neighbors(point):
-    x, y = point[0][0], point[0][1]
-    count = point[1]
+def compute_neighbors(point_count_map):
     neighbors = []
-    for i in range(-3, 4):
-        for j in range(-3, 4):
-            if abs(i) >= 2 or abs(j) >= 2:
-                n3 = 0
-            else:
-                n3 = 1
-            neighbors.append(((x+i, y+j), (count*n3, count)))
+    for (x, y) in point_count_map.keys():
+        N3, N7 = 0, 0
+        for i in range(-3, 4):
+            for j in range(-3, 4):
+                p = (x + i, y + j)
+                if p in point_count_map:
+                    is_n3 = 0 if (abs(i) >= 2) or (abs(j) >= 2) else 1
+                    count = point_count_map[p]
+                    N3 += count * is_n3
+                    N7 += count
+        neighbors.append(((x, y), (N3, N7)))
     return neighbors
 
 
-def gather_sums(x):
-    tot_n3 = 0
-    tot_n7 = 0
-    for p in x:
-        tot_n3 += p[0]
-        tot_n7 += p[1]
-    return tot_n3, tot_n7
-
-
 def MRApproxOutliers(points, D, M, K):
+    # Step A
     mapped_points = (((points.map(lambda x: map_point(x, D/(2 * math.sqrt(2)))) # Round 1
                      .mapPartitions(gather_partitions)
                      .groupByKey() # Round 2
-                     .mapValues(lambda vals: sum(vals)))
-                     .flatMap(comp_neighbors)) # Round 3
-                     .groupByKey()
-                     .mapValues(gather_sums))
-    print(mapped_points.collect())
+                     .mapValues(lambda vals: sum(vals))))).cache()
+
+    # Step B can be sequential
+    grid_points_list = mapped_points.collect()
+    point_count_map = dict((k, v) for k,v in grid_points_list)
+    print(compute_neighbors(point_count_map))
 
 
 if __name__ == "__main__":
