@@ -101,12 +101,13 @@ def MRApproxOutliers(points, D, M, K):
 
 
 if __name__ == "__main__":
-    # points = readinput("TestN15-input.txt")
-    # exactOutliers(points, 1, 3, 10)
+    points = readinput("uber-10k.csv")
+    exactOutliers(points, 1, 3, 10)
     conf = SparkConf().setAppName('HW1')
     sc = SparkContext(conf=conf)
 
     K = 5
-    points = sc.textFile("TestN15-input.txt").repartition(K).cache()
-    MRApproxOutliers(points, 1,1,1)
+    points = sc.textFile("uber-10k.csv", minPartitions=K).cache()
+    points = points.repartition(numPartitions=K)
+    MRApproxOutliers(points, 0.02,10,5)
 
