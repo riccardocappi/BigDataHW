@@ -13,6 +13,7 @@ outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point 
 '''
 import math
 from math import hypot
+import time
 
 def readinput(filename):
     file = open(filename)
@@ -26,16 +27,16 @@ def readinput(filename):
     return points
 
 
-def exactOutliers(points, distance, M, K=10):
+def exactOutliers(points, distance, M):
     inside_points = [0]*len(points)
-    for i in range(len(points)):
-        for j in range(i,len(points)):
+    for i in range(len(points)-1):
+        for j in range(i+1,len(points)):
             dist = hypot(points[i][0]-points[j][0], points[i][1]-points[j][1])
             if dist < distance:
                 inside_points[i] += 1
                 inside_points[j] += 1
-    outliers = [point for point, count in zip(points, inside_points) if count < M]
-    print(outliers)
+    outliers = [(point, count) for point, count in zip(points, inside_points) if count < M]
+    return outliers
 
 
 '''
@@ -71,8 +72,9 @@ def gather_partitions(points):
     return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
-def compute_neighbors(point_count_map):
-    neighbors = []
+def compute_outliers(point_count_map, M):
+    outliers = []
+    uncertain_outliers = []
     for (x, y) in point_count_map.keys():
         N3, N7 = 0, 0
         for i in range(-3, 4):
@@ -83,8 +85,12 @@ def compute_neighbors(point_count_map):
                     count = point_count_map[p]
                     N3 += count * is_n3
                     N7 += count
-        neighbors.append(((x, y), (N3, N7)))
-    return neighbors
+        if N7 <= M:
+            outliers.append(((x, y), point_count_map[(x, y)]))
+        elif N3 <= M:
+            uncertain_outliers.append(((x, y), point_count_map[(x, y)]))
+
+    return outliers, uncertain_outliers
 
 
 def MRApproxOutliers(points, D, M, K):
@@ -97,17 +103,44 @@ def MRApproxOutliers(points, D, M, K):
     # Step B can be sequential
     grid_points_list = mapped_points.collect()
     point_count_map = dict((k, v) for k,v in grid_points_list)
-    print(compute_neighbors(point_count_map))
+    outliers, uncertain_points = compute_outliers(point_count_map, M)
+    return grid_points_list, outliers, uncertain_points
 
 
 if __name__ == "__main__":
-    points = readinput("uber-10k.csv")
-    exactOutliers(points, 1, 3, 10)
+    D, M, K, L = 0.2, 10, 50, 2       # TODO: read from command line
+    file_name = "uber-10k.csv"
+    points = readinput(file_name)
+    number_of_points = len(points)
+    print("Number of points:", number_of_points)
+    if number_of_points < 200000:
+        start = time.time()
+        outliers = exactOutliers(points, D, M)
+        end = time.time()
+        outliers.sort(key=lambda x: x[1])
+        print("Number of outliers:", len(outliers))
+        for outlier in outliers[:K]:
+            print("Point: " + str(outlier[0]))
+        print(f"Running time of ExactOutliers = {round((end-start)*1000)} ms")
+
     conf = SparkConf().setAppName('HW1')
     sc = SparkContext(conf=conf)
+    sc.setLogLevel("WARN")
 
-    K = 5
-    points = sc.textFile("uber-10k.csv", minPartitions=K).cache()
-    points = points.repartition(numPartitions=K)
-    MRApproxOutliers(points, 0.02,10,5)
+    points = sc.textFile(file_name, minPartitions=L).cache()
+    points = points.repartition(numPartitions=L)
+
+    start = time.time()
+    all_points, outliers, uncertain_outliers = MRApproxOutliers(points, D, M, K)
+    end = time.time()
+    print(f"Number of sure outliers = {sum([x[1] for x in outliers])}")
+    print(f"Number of uncertain points = {sum([x[1] for x in uncertain_outliers])}")
+
+    # printing first k non-empty cells (not the first k outliers)
+    all_points.sort(key=lambda x: x[1])
+    for point in all_points[:K]:
+        print(f"Cell: {point[0]}  Size = {point[1]}")
+    print(f"Running time of MRApproxOutliers = {round((end - start) * 1000)} ms")
+
+    # TODO: rename variables
 
