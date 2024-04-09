@@ -1,3 +1,4 @@
+import math
 
 from pyspark import SparkContext, SparkConf
 '''
@@ -11,32 +12,24 @@ The first 𝐾
 outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point per line. (If there are less than 𝐾 outlier, it prints all of them.)
 
 '''
-import math
 from math import hypot
 import time
-
-def readinput(filename):
-    file = open(filename)
-    lines = file.readlines()
-    points = []
-    for line in lines:
-        point_x, point_y = line.split(",")
-        point = (float(point_x), float(point_y))
-        points.append(point)
-
-    return points
+import sys
 
 
-def exactOutliers(points, distance, M):
+def ExactOutliers(points, D, M, K):
     inside_points = [0]*len(points)
     for i in range(len(points)-1):
         for j in range(i+1,len(points)):
             dist = hypot(points[i][0]-points[j][0], points[i][1]-points[j][1])
-            if dist < distance:
+            if dist < D:
                 inside_points[i] += 1
                 inside_points[j] += 1
     outliers = [(point, count) for point, count in zip(points, inside_points) if count < M]
-    return outliers
+    outliers.sort(key=lambda x: x[1])
+    print("Number of outliers:", len(outliers))
+    for outlier in outliers[:K]:
+        print("Point: " + str(outlier[0]))
 
 
 '''
@@ -56,9 +49,9 @@ non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers an
 '''
 
 
-def map_point(str_x, l):
-    point_x, point_y = str_x.split(",")
-    point = (float(point_x)//l, float(point_y)//l)
+def string_to_point(str_point):
+    point_x, point_y = str_point.split(",")
+    point = (float(point_x), float(point_y))
     return point
 
 
@@ -72,75 +65,86 @@ def gather_partitions(points):
     return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
-def compute_outliers(point_count_map, M):
-    outliers = []
-    uncertain_outliers = []
-    for (x, y) in point_count_map.keys():
-        N3, N7 = 0, 0
-        for i in range(-3, 4):
-            for j in range(-3, 4):
-                p = (x + i, y + j)
-                if p in point_count_map:
-                    is_n3 = 0 if (abs(i) >= 2) or (abs(j) >= 2) else 1
-                    count = point_count_map[p]
-                    N3 += count * is_n3
-                    N7 += count
-        if N7 <= M:
-            outliers.append(((x, y), point_count_map[(x, y)]))
-        elif N3 <= M:
-            uncertain_outliers.append(((x, y), point_count_map[(x, y)]))
-
-    return outliers, uncertain_outliers
+def compute_n3_n7(point_count_map, x, y):
+    N3, N7 = 0, 0
+    for i in range(-3, 4):
+        for j in range(-3, 4):
+            p = (x + i, y + j)
+            if p in point_count_map:
+                is_n3 = 0 if (abs(i) >= 2) or (abs(j) >= 2) else 1
+                count = point_count_map[p]
+                N3 += count * is_n3
+                N7 += count
+    size = point_count_map[(x, y)]
+    return (x, y), size, N3, N7
 
 
 def MRApproxOutliers(points, D, M, K):
     # Step A
-    mapped_points = (((points.map(lambda x: map_point(x, D/(2 * math.sqrt(2)))) # Round 1
+    Lambda = D / (2 * math.sqrt(2))
+    grid_counts = (((points.map(lambda point: (point[0] // Lambda, point[1] // Lambda)) # Round 1. Map points to grid
                      .mapPartitions(gather_partitions)
                      .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals))))).cache()
 
     # Step B can be sequential
-    grid_points_list = mapped_points.collect()
-    point_count_map = dict((k, v) for k,v in grid_points_list)
-    outliers, uncertain_points = compute_outliers(point_count_map, M)
-    return grid_points_list, outliers, uncertain_points
+    grid_counts_list = grid_counts.collect()
+    grid_counts_dict = dict((k, v) for k,v in grid_counts_list)
+    cell_info = map(lambda cell: compute_n3_n7(grid_counts_dict, cell[0], cell[1])
+                 ,grid_counts_dict.keys())
+    outliers, uncertain_points = 0,0
+    for cell, size, N3, N7 in cell_info:
+        if N7 <= M:
+            outliers += size
+        elif N3 <= M:
+            uncertain_points += size
+    print(f"Number of sure outliers = {outliers}")
+    print(f"Number of uncertain points = {uncertain_points}")
+    first_k_non_empty_cells = (grid_counts.map(lambda cell_counts: (cell_counts[1], cell_counts[0]))
+                               .sortByKey(ascending=True)).take(K)
+    for cell in first_k_non_empty_cells:
+        print(f"Cell: {cell[1]}  Size = {cell[0]}")
 
 
-if __name__ == "__main__":
-    D, M, K, L = 0.2, 10, 50, 2       # TODO: read from command line
-    file_name = "uber-10k.csv"
-    points = readinput(file_name)
-    number_of_points = len(points)
-    print("Number of points:", number_of_points)
-    if number_of_points < 200000:
-        start = time.time()
-        outliers = exactOutliers(points, D, M)
-        end = time.time()
-        outliers.sort(key=lambda x: x[1])
-        print("Number of outliers:", len(outliers))
-        for outlier in outliers[:K]:
-            print("Point: " + str(outlier[0]))
-        print(f"Running time of ExactOutliers = {round((end-start)*1000)} ms")
+def main():
+    assert len(sys.argv) == 6, "Usage: python G017HW1.py <file_path> <D> <M> <K> <L>"
 
-    conf = SparkConf().setAppName('HW1')
+    # SPARK SETUP
+    conf = SparkConf().setAppName('G017HW1')
     sc = SparkContext(conf=conf)
     sc.setLogLevel("WARN")
 
-    points = sc.textFile(file_name, minPartitions=L).cache()
-    points = points.repartition(numPartitions=L)
+    try:
+        file_path = sys.argv[1]
+        D = float(sys.argv[2])
+        M = int(sys.argv[3])
+        K = int(sys.argv[4])
+        L = int(sys.argv[5])
+    except TypeError:
+        print("Wrong type inserted")
+        return -1
+
+    print(f"{file_path} D={D} M={M} K={K} L={L}")
+    # Create RDD of strings
+    rawData = sc.textFile(file_path, minPartitions=L)
+    # Transform the string RDD into an RDD of points (pair of floats)
+    inputPoints = rawData.map(string_to_point).repartition(L).cache()
+    number_of_points = inputPoints.count()
+    print(f"Number of points = {number_of_points}")
+    if number_of_points < 200000:
+        # Downloads the points into a list called listOfPoints
+        listOfPoints = inputPoints.collect()
+        start = time.time()
+        ExactOutliers(listOfPoints, D, M, K)
+        end = time.time()
+        print(f"Running time of ExactOutliers = {round((end - start) * 1000)} ms")
 
     start = time.time()
-    all_points, outliers, uncertain_outliers = MRApproxOutliers(points, D, M, K)
+    MRApproxOutliers(inputPoints, D, M, K)
     end = time.time()
-    print(f"Number of sure outliers = {sum([x[1] for x in outliers])}")
-    print(f"Number of uncertain points = {sum([x[1] for x in uncertain_outliers])}")
-
-    # printing first k non-empty cells (not the first k outliers)
-    all_points.sort(key=lambda x: x[1])
-    for point in all_points[:K]:
-        print(f"Cell: {point[0]}  Size = {point[1]}")
     print(f"Running time of MRApproxOutliers = {round((end - start) * 1000)} ms")
 
-    # TODO: rename variables
+
+if __name__ == "__main__":
+    main()
 
