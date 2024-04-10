@@ -134,7 +134,7 @@ def main():
     print(f"{file_path} D={D} M={M} K={K} L={L}")
 
     # Create RDD of strings
-    rawData = sc.textFile(file_path, minPartitions=L)
+    rawData = sc.textFile(file_path)
     # Transform the string RDD into an RDD of points (pair of floats)
     inputPoints = rawData.map(string_to_point).repartition(L).cache()
     number_of_points = inputPoints.count()
