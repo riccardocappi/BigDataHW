@@ -5,14 +5,12 @@ import sys
 
 
 '''
-1) Write a method/function ExactOutliers which implements the Exact algorithm,
-through standard sequential code which does not use RDDs.  Specifically, ExactOutliers
-takes as input a list of points (ArrayList in Java, or a list in Python) and
-parameters 𝐷 (float), 𝑀,𝐾 (integers), and must compute and print the following information.
-    - The number of (𝐷,𝑀)
-    - outliers.
-The first 𝐾 outliers points 𝑝 in non-decresing order of |𝐵𝑆(𝑝,𝐷)|, one point per line. 
-(If there are less than 𝐾 outlier, it prints all of them.)
+1) Write a method/function ExactOutliers which implements the Exact algorithm, through standard sequential code which 
+does not use RDDs.  Specifically, ExactOutliers takes as input a list of points (ArrayList in Java, or a list in Python) 
+and parameters D (float), M,K (integers), and must compute and print the following information.
+    - The number of (D,M) outliers.
+    - The first K outliers points p in non-decreasing order of |BS(p,D)| , one point per line. (If there are less than K
+ outlier, it prints all of them.)
 
 '''
 
@@ -27,28 +25,30 @@ def ExactOutliers(points, D, M, K):
                 inside_points[j] += 1
     outliers = [(point, count) for point, count in zip(points, inside_points) if count < M]
     outliers.sort(key=lambda x: x[1])
-    print("Number of outliers:", len(outliers))
+    print(f"Number of outliers = {len(outliers)}")
     for outlier in outliers[:K]:
-        print("Point: " + str(outlier[0]))
+        print(f"Point: {str(outlier[0])}")
 
 
 '''
-2) Write a method/function MRApproxOutliers which implements the above approximate algorithm. Specifically, 
-MRApproxOutliers must take as input an RDD of points and parameters 𝐷 (float), 𝑀,𝐾 (integers), and can assume 
-that the RDD is already subdivided into a suitable number of partitions. MRApproxOutliers consists of two main steps. 
-Step A transforms the input RDD into an RDD whose elements corresponds to the non-empty cells and, contain, for each cell, 
-its identifier (𝑖,𝑗) and the number of points of 𝑆 that it contains. The computation must be done by exploiting the 
-Spark partitions, without gathering together all points of a cell (which could be too many). Step B transforms the RDD 
-of cells, resulting from Step A, by attaching to each element, relative to a non-empty cell 𝐶, the values |𝑁3(𝐶)| and |𝑁7(𝐶)|, 
-as additional info. To this purpose, you can assume that the total number of non-empty cells is small with respect to 
-the capacity of each executor's memory. MRApproxOutliers must eventually compute and print
-    - The number of sure (𝐷,𝑀)
+2) Write a method/function MRApproxOutliers which implements the above approximate algorithm. 
+Specifically, MRApproxOutliers must take as input an RDD of points and parameters D (float), M,K (integers), 
+and can assume that the RDD is already subdivided into a suitable number of partitions.
+MRApproxOutliers consists of two main steps. Step A transforms the input RDD into an RDD whose elements corresponds 
+to the non-empty cells and, contain, for each cell, its identifier (i,j) and the number of points of S
+that it contains. The computation must be done by exploiting the Spark partitions, without gathering together all 
+points of a cell (which could be too many). Step B processes the RDD of cells, resulting from Step A, and determines 
+for each non-empty cell C , the values N3(C) and N7(C). To this purpose, you can assume that the total number of 
+non-empty cells is small with respect to the capacity of each executor's memory, and can be downloaded in a local data 
+structure. MRApproxOutliers must eventually compute and print
 
-    - outliers.
-    
+    - The number of sure (D,M) outliers.
     - The number of uncertain points.
-For the first 𝐾 non-empty cells,  in non-decreasing order of |𝑁3(𝐶)|, their identifiers and value of |𝑁3(𝐶)|, one 
-line per cell. (If there are less than 𝐾 non-empty cells, it prints the information for all of them.)
+    - The first K non-empty cells,  in non-decreasing order of cell size, printing, for each such cell, its identifier 
+    and its size. (If there are less than K non-empty cells, it prints the information for all of them.) 
+    Note that the size of a cell is the number of points of S in the cell. Since in Step A you generated an RDD of 
+    cells with their sizes, the first K non-empty cells in the required order, must be obtained using a map method 
+    (the most suitable one), followed by the sortByKey and take methods on this RDD.
 '''
 
 
@@ -58,7 +58,7 @@ def string_to_point(str_point):
     return point
 
 
-def gather_partitions(points):
+def gather_pairs_partitions(points):
     points_dict = {}
     for point in points:
         if point not in points_dict:
@@ -68,17 +68,17 @@ def gather_partitions(points):
     return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
-def compute_n3_n7(point_count_map, x, y):
+def compute_n3_n7(grid_counts_dict, x, y):
     N3, N7 = 0, 0
     for i in range(-3, 4):
         for j in range(-3, 4):
             p = (x + i, y + j)
-            if p in point_count_map:
+            if p in grid_counts_dict:
                 is_n3 = 0 if (abs(i) >= 2) or (abs(j) >= 2) else 1
-                count = point_count_map[p]
+                count = grid_counts_dict[p]
                 N3 += count * is_n3
                 N7 += count
-    size = point_count_map[(x, y)]
+    size = grid_counts_dict[(x, y)]
     return (x, y), size, N3, N7
 
 
@@ -86,7 +86,7 @@ def MRApproxOutliers(points, D, M, K):
     # Step A
     Lambda = D / (2 * sqrt(2))
     grid_counts = (((points.map(lambda point: (point[0] // Lambda, point[1] // Lambda)) # Round 1. Map points to grid
-                     .mapPartitions(gather_partitions)
+                     .mapPartitions(gather_pairs_partitions)
                      .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals))))).cache()
 
@@ -97,11 +97,11 @@ def MRApproxOutliers(points, D, M, K):
     cell_info = map(lambda cell: compute_n3_n7(grid_counts_dict, cell[0], cell[1])
                  ,grid_counts_dict.keys())
     outliers, uncertain_points = 0,0
-    for cell, size, N3, N7 in cell_info:
+    for _, count, N3, N7 in cell_info:
         if N7 <= M:
-            outliers += size
+            outliers += count
         elif N3 <= M:
-            uncertain_points += size
+            uncertain_points += count
     print(f"Number of sure outliers = {outliers}")
     print(f"Number of uncertain points = {uncertain_points}")
     # Since in StepA you generated an RDD of cells with their sizes, the first K
@@ -134,12 +134,12 @@ def main():
     print(f"{file_path} D={D} M={M} K={K} L={L}")
 
     # Create RDD of strings
-    rawData = sc.textFile(file_path, minPartitions=L)
+    rawData = sc.textFile(file_path)
     # Transform the string RDD into an RDD of points (pair of floats)
     inputPoints = rawData.map(string_to_point).repartition(L).cache()
     number_of_points = inputPoints.count()
     print(f"Number of points = {number_of_points}")
-    if number_of_points < 200000:
+    if number_of_points <= 200000:
         # Downloads the points into a list called listOfPoints
         listOfPoints = inputPoints.collect()
         start = time.time()
