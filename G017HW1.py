@@ -85,7 +85,7 @@ def compute_n3_n7(grid_counts_dict, x, y):
 def MRApproxOutliers(points, D, M, K):
     # Step A
     Lambda = D / (2 * sqrt(2))
-    grid_counts = (((points.map(lambda point: (point[0] // Lambda, point[1] // Lambda)) # Round 1. Map points to grid
+    grid_counts = (((points.map(lambda point: (int(point[0] // Lambda), int(point[1] // Lambda))) # Round 1. Map points to grid
                      .mapPartitions(gather_pairs_partitions)
                      .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals))))).cache()
