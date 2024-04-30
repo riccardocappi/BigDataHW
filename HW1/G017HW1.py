@@ -25,7 +25,7 @@ def ExactOutliers(points, D, M, K):
                 inside_points[j] += 1
     outliers = [(point, count) for point, count in zip(points, inside_points) if count < M]
     outliers.sort(key=lambda x: x[1])
-    print(f"Number of outliers = {len(outliers)}")
+    print(f"Number of Outliers = {len(outliers)}")
     for outlier in outliers[:K]:
         print(f"Point: {str(outlier[0])}")
 
@@ -85,7 +85,7 @@ def compute_n3_n7(grid_counts_dict, x, y):
 def MRApproxOutliers(points, D, M, K):
     # Step A
     Lambda = D / (2 * sqrt(2))
-    grid_counts = (((points.map(lambda point: (point[0] // Lambda, point[1] // Lambda)) # Round 1. Map points to grid
+    grid_counts = (((points.map(lambda point: (int(point[0] // Lambda), int(point[1] // Lambda))) # Round 1. Map points to grid
                      .mapPartitions(gather_pairs_partitions)
                      .groupByKey() # Round 2
                      .mapValues(lambda vals: sum(vals))))).cache()
@@ -136,6 +136,7 @@ def main():
     # Create RDD of strings
     rawData = sc.textFile(file_path)
     # Transform the string RDD into an RDD of points (pair of floats)
+    # subdivided into L partitions
     inputPoints = rawData.map(string_to_point).repartition(L).cache()
     number_of_points = inputPoints.count()
     print(f"Number of points = {number_of_points}")
