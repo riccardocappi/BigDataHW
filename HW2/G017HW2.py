@@ -1,6 +1,10 @@
+import time
+
 from pyspark import SparkContext, SparkConf
 from math import hypot, sqrt
-import random
+# import random
+import sys
+
 
 
 def string_to_point(str_point):
@@ -35,10 +39,8 @@ def compute_n3_n7(grid_counts_dict, x, y):
 def MRApproxOutliers(points, D, M):
     # Step A
     Lambda = D / (2 * sqrt(2))
-    grid_counts = (((points.map(lambda point: (int(point[0] // Lambda), int(point[1] // Lambda))) # Round 1. Map points to grid
-                     .mapPartitions(gather_pairs_partitions)
-                     .groupByKey() # Round 2
-                     .mapValues(lambda vals: sum(vals))))).cache()
+    grid_counts = (points.map(lambda point: ((int(point[0] // Lambda), int(point[1] // Lambda)), 1))
+                   .reduceByKey(lambda x, y: x + y)).cache()
 
     # Step B can be sequential
     grid_counts_list = grid_counts.collect()
@@ -65,7 +67,7 @@ def SequentialFFT(P, K):
         return []
 
     P_set = set(P)
-    c_1 = random.choice(P)
+    c_1 = P[0]
     C = [c_1]
     P_set.remove(c_1)
     distance_table = dict((p, distance(p, c_1)) for p in P_set)
@@ -77,23 +79,47 @@ def SequentialFFT(P, K):
                 distance_table[p] = curr_dis
         C.append(c_i)
         P_set.remove(c_i)
-    return list(C)
+        # del distance_table[c_i]
+    return C
 
 def MRFFT(P, K):
     coreset = P.mapPartitions(lambda P_i: SequentialFFT(list(P_i), K)).collect()
-    print(coreset)
-    return SequentialFFT(coreset, K)
+    centers = SequentialFFT(coreset, K)
+    # Round 3
+    C = sc.broadcast(centers)
+    R = (P.map(lambda point: min([distance(point, c) for c in C.value]))
+     .reduce(lambda d1, d2: d1 if d1 > d2 else d2))
+    return R
 
+
+# SPARK SETUP
+conf = SparkConf().setAppName('G017HW2')
+sc = SparkContext(conf=conf)
+
+
+def main():
+    assert len(sys.argv) == 5, "Usage: python G017HW2.py <file_path> <M> <K> <L>"
+    sc.setLogLevel("WARN")
+    try:
+        file_path = sys.argv[1]
+        M = int(sys.argv[2])
+        K = int(sys.argv[3])
+        L = int(sys.argv[4])
+    except TypeError:
+        print("Wrong type inserted")
+        return -1
+
+    print(f"{file_path} M={M} K={K} L={L}")
+
+    rawData = sc.textFile(file_path)
+    inputPoints = rawData.map(string_to_point).repartition(L).cache()
+    start = time.time()
+    D = MRFFT(inputPoints, K)
+    end = time.time()
+    print(D)
+    print(f"Running time = {round((end - start) * 1000)} ms")
+    MRApproxOutliers(inputPoints, D, M)
 
 
 if __name__ == "__main__":
-    # SPARK SETUP
-    conf = SparkConf().setAppName('G017HW1')
-    sc = SparkContext(conf=conf)
-    sc.setLogLevel("WARN")
-    file_path = "./TestN15-input.txt"
-    L = 2
-    rawData = sc.textFile(file_path)
-    inputPoints = rawData.map(string_to_point).repartition(L).cache()
-    print(MRFFT(inputPoints, 3))
-
+    main()
