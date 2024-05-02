@@ -86,7 +86,7 @@ def MRApproxOutliers(points, D, M, K):
     # Step A
     Lambda = D / (2 * sqrt(2))
     grid_counts = (points.map(lambda point: ((int(point[0] // Lambda), int(point[1] // Lambda)), 1))
-                   .reduceByKey(lambda x, y: x + y))
+                   .reduceByKey(lambda x, y: x + y)).cache()
 
     # Step B can be sequential
     grid_counts_list = grid_counts.collect()
