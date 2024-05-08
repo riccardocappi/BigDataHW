@@ -56,16 +56,23 @@ def SequentialFFT(P, K):
         return []
 
     P_set = set(P)
-    c_1 = P[0]
-    C = [c_1]
-    P_set.remove(c_1)
-    distance_table = dict((p, distance(p, c_1)) for p in P_set)
+    c_i = P[0]
+    # c_1 = random.choice(P)
+    C = [c_i]
+    P_set.remove(c_i)
+    distance_table = dict((p, -1) for p in P_set)
     for i in range(2, K + 1):
-        c_i = max(distance_table.keys(), key=lambda x: distance_table[x])
+        curr_max_dis = -1
+        curr_c_i = None
         for p in P_set:
             curr_dis = distance(p, c_i)
-            if curr_dis < distance_table[p]:
+            if curr_dis < distance_table[p] or distance_table[p] == -1:
                 distance_table[p] = curr_dis
+            last_distance = distance_table[p]
+            if last_distance > curr_max_dis:
+                curr_max_dis = last_distance
+                curr_c_i = p
+        c_i = curr_c_i
         C.append(c_i)
         P_set.remove(c_i)
         # del distance_table[c_i]
@@ -83,6 +90,7 @@ def MRFFT(P, K):
     # Round 2
     start = time.time()
     coreset = coreset_rdd.collect()
+    # print(len(coreset))
     centers = SequentialFFT(coreset, K)
     end = time.time()
     print(f"Running time of MRFFT Round 2 = {round((end - start) * 1000)} ms")
