@@ -2,25 +2,14 @@ import time
 
 from pyspark import SparkContext, SparkConf
 from math import hypot, sqrt
-# import random
+import random
 import sys
-
 
 
 def string_to_point(str_point):
     point_x, point_y = str_point.split(",")
     point = (float(point_x), float(point_y))
     return point
-
-
-def gather_pairs_partitions(points):
-    points_dict = {}
-    for point in points:
-        if point not in points_dict:
-            points_dict[point] = 1
-        else:
-            points_dict[point] += 1
-    return [(key, points_dict[key]) for key in points_dict.keys()]
 
 
 def compute_n3_n7(grid_counts_dict, x, y):
@@ -36,14 +25,14 @@ def compute_n3_n7(grid_counts_dict, x, y):
     size = grid_counts_dict[(x, y)]
     return (x, y), size, N3, N7
 
+
 def MRApproxOutliers(points, D, M):
     # Step A
     Lambda = D / (2 * sqrt(2))
-    grid_counts = (points.map(lambda point: ((int(point[0] // Lambda), int(point[1] // Lambda)), 1))
-                   .reduceByKey(lambda x, y: x + y)).cache()
+    grid_counts_list = (points.map(lambda point: ((int(point[0] // Lambda), int(point[1] // Lambda)), 1))
+                        .reduceByKey(lambda x, y: x + y)).collect()
 
     # Step B can be sequential
-    grid_counts_list = grid_counts.collect()
     grid_counts_dict = dict((k, v) for k,v in grid_counts_list)
     # Determine for each cell its identifier, count, N3 and N7
     cell_info = map(lambda cell: compute_n3_n7(grid_counts_dict, cell[0], cell[1])
@@ -71,7 +60,7 @@ def SequentialFFT(P, K):
     C = [c_1]
     P_set.remove(c_1)
     distance_table = dict((p, distance(p, c_1)) for p in P_set)
-    for i in range(2, K+1):
+    for i in range(2, K + 1):
         c_i = max(distance_table.keys(), key=lambda x: distance_table[x])
         for p in P_set:
             curr_dis = distance(p, c_i)
@@ -82,19 +71,35 @@ def SequentialFFT(P, K):
         # del distance_table[c_i]
     return C
 
+
 def MRFFT(P, K):
-    coreset = P.mapPartitions(lambda P_i: SequentialFFT(list(P_i), K)).collect()
+    # Round 1
+    start = time.time()
+    coreset_rdd = P.mapPartitions(lambda P_i: SequentialFFT(list(P_i), K)).cache()
+    coreset_rdd.count()
+    end = time.time()
+    print(f"Running time of MRFFT Round 1 = {round((end - start) * 1000)} ms")
+
+    # Round 2
+    start = time.time()
+    coreset = coreset_rdd.collect()
     centers = SequentialFFT(coreset, K)
+    end = time.time()
+    print(f"Running time of MRFFT Round 2 = {round((end - start) * 1000)} ms")
     # Round 3
+    start = time.time()
     C = sc.broadcast(centers)
     R = (P.map(lambda point: min([distance(point, c) for c in C.value]))
-     .reduce(lambda d1, d2: d1 if d1 > d2 else d2))
+         .reduce(lambda d1, d2: d1 if d1 > d2 else d2))
+    end = time.time()
+    print(f"Running time of MRFFT Round 3 = {round((end - start) * 1000)} ms")
     return R
 
 
 # SPARK SETUP
 conf = SparkConf().setAppName('G017HW2')
 sc = SparkContext(conf=conf)
+# random.seed(42)
 
 
 def main():
@@ -113,12 +118,16 @@ def main():
 
     rawData = sc.textFile(file_path)
     inputPoints = rawData.map(string_to_point).repartition(L).cache()
-    start = time.time()
+    number_of_points = inputPoints.count()
+    print(f"Number of points = {number_of_points}")
+
     D = MRFFT(inputPoints, K)
-    end = time.time()
-    print(D)
-    print(f"Running time = {round((end - start) * 1000)} ms")
+    print(f"Radius = {D}")
+
+    start = time.time()
     MRApproxOutliers(inputPoints, D, M)
+    end = time.time()
+    print(f"Running time of MRApproxOutliers = {round((end - start) * 1000)} ms")
 
 
 if __name__ == "__main__":
