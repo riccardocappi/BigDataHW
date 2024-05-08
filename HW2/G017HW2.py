@@ -54,6 +54,7 @@ def distance(p1, p2):
 def SequentialFFT(P, K):
     if len(P) == 0:
         return []
+
     P_set = set(P)
     c_i = P[0]
     # c_1 = random.choice(P)
