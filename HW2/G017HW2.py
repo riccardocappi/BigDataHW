@@ -65,9 +65,11 @@ def SequentialFFT(P, K):
         curr_c_i = None
         for p in distance_table.keys():
             curr_dis = distance(p, c_i)
-            if curr_dis < distance_table[p] or distance_table[p] == -1:
-                distance_table[p] = curr_dis
             last_distance = distance_table[p]
+            if curr_dis < last_distance or last_distance == -1:
+                distance_table[p] = curr_dis
+                last_distance = curr_dis
+
             if last_distance > curr_max_dis:
                 curr_max_dis = last_distance
                 curr_c_i = p
