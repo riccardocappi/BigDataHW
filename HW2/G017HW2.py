@@ -55,16 +55,15 @@ def SequentialFFT(P, K):
     if len(P) == 0:
         return []
 
-    P_set = set(P)
     c_i = P[0]
     # c_1 = random.choice(P)
     C = [c_i]
-    P_set.remove(c_i)
-    distance_table = dict((p, -1) for p in P_set)
+    distance_table = dict((p, -1) for p in P)
+    del distance_table[c_i]
     for i in range(2, K + 1):
         curr_max_dis = -1
         curr_c_i = None
-        for p in P_set:
+        for p in distance_table.keys():
             curr_dis = distance(p, c_i)
             if curr_dis < distance_table[p] or distance_table[p] == -1:
                 distance_table[p] = curr_dis
@@ -74,8 +73,7 @@ def SequentialFFT(P, K):
                 curr_c_i = p
         c_i = curr_c_i
         C.append(c_i)
-        P_set.remove(c_i)
-        # del distance_table[c_i]
+        del distance_table[c_i]
     return C
 
 
