@@ -1,8 +1,7 @@
 import time
 
 from pyspark import SparkContext, SparkConf
-from math import hypot, sqrt
-import random
+from math import sqrt
 import sys
 
 
@@ -109,6 +108,7 @@ def MRFFT(P, K):
 # SPARK SETUP
 conf = SparkConf().setAppName('G017HW2')
 sc = SparkContext(conf=conf)
+conf.set("spark.locality.wait", "0s")
 # random.seed(42)
 
 
