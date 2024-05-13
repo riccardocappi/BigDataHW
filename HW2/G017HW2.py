@@ -107,8 +107,9 @@ def MRFFT(P, K):
 
 # SPARK SETUP
 conf = SparkConf().setAppName('G017HW2')
-sc = SparkContext(conf=conf)
 conf.set("spark.locality.wait", "0s")
+sc = SparkContext(conf=conf)
+
 # random.seed(42)
 
 
