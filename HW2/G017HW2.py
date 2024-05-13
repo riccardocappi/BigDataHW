@@ -48,7 +48,9 @@ def MRApproxOutliers(points, D, M):
 
 
 def distance(p1, p2):
-    return hypot(p1[0] - p2[0], p1[1] - p2[1])
+    t0 = p1[0] - p2[0]
+    t1 = p1[1] - p2[1]
+    return t0*t0 + t1*t1
 
 
 def SequentialFFT(P, K):
@@ -101,7 +103,7 @@ def MRFFT(P, K):
          .reduce(lambda d1, d2: d1 if d1 > d2 else d2))
     end = time.time()
     print(f"Running time of MRFFT Round 3 = {round((end - start) * 1000)} ms")
-    return R
+    return sqrt(R)
 
 
 # SPARK SETUP
