@@ -1,5 +1,5 @@
 import time
-
+import numpy as np
 from pyspark import SparkContext, SparkConf
 from math import sqrt
 import sys
@@ -57,26 +57,17 @@ def SequentialFFT(P, K):
         return []
 
     c_i = P[0]
-    # c_1 = random.choice(P)
     C = [c_i]
-    distance_table = dict((p, -1) for p in P)
-    del distance_table[c_i]
-    for i in range(2, K + 1):
-        curr_max_dis = -1
-        curr_c_i = None
-        for p in distance_table.keys():
-            curr_dis = distance(p, c_i)
-            last_distance = distance_table[p]
-            if curr_dis < last_distance or last_distance == -1:
-                distance_table[p] = curr_dis
-                last_distance = curr_dis
-
-            if last_distance > curr_max_dis:
-                curr_max_dis = last_distance
-                curr_c_i = p
-        c_i = curr_c_i
+    distance_table = np.full(len(P), np.inf)
+    distance_table[0] = 0.0
+    for _ in range(2, K+1):
+        for i, p in enumerate(P):
+            curr_distance = distance(c_i, p)
+            if curr_distance < distance_table[i]:
+                distance_table[i] = curr_distance
+        row_index = np.argmax(distance_table)
+        c_i = P[row_index]
         C.append(c_i)
-        del distance_table[c_i]
     return C
 
 
@@ -107,7 +98,7 @@ def MRFFT(P, K):
 
 # SPARK SETUP
 conf = SparkConf().setAppName('G017HW2')
-# conf.set("spark.locality.wait", "0s")
+conf.set("spark.locality.wait", "0s")
 sc = SparkContext(conf=conf)
 
 # random.seed(42)
