@@ -61,8 +61,8 @@ def SequentialFFT(P, K):
     distance_table = np.full(len(P), np.inf)
     distance_table[0] = 0.0
     for _ in range(2, K+1):
-        for i, p in enumerate(P):
-            curr_distance = distance(c_i, p)
+        for i in range(len(P)):
+            curr_distance = distance(c_i, P[i])
             if curr_distance < distance_table[i]:
                 distance_table[i] = curr_distance
         row_index = np.argmax(distance_table)
