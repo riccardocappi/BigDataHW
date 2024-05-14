@@ -58,14 +58,18 @@ def SequentialFFT(P, K):
 
     c_i = P[0]
     C = [c_i]
-    distance_table = np.full(len(P), np.inf)
-    distance_table[0] = 0.0
+    # In distance_from_C we store the distances between each point in P
+    # and the set of centers selected up to the current step
+    # We use a numpy array to speed up the code as much as possible
+    distance_from_C = np.full(len(P), np.inf)
+    distance_from_C[0] = 0.0
     for _ in range(2, K+1):
         for i in range(len(P)):
             curr_distance = distance(c_i, P[i])
-            if curr_distance < distance_table[i]:
-                distance_table[i] = curr_distance
-        row_index = np.argmax(distance_table)
+            if curr_distance < distance_from_C[i]:
+                # Updates the new distance of point x_i from C
+                distance_from_C[i] = curr_distance
+        row_index = np.argmax(distance_from_C)
         c_i = P[row_index]
         C.append(c_i)
     return C
@@ -82,7 +86,6 @@ def MRFFT(P, K):
     # Round 2
     start = time.time()
     coreset = coreset_rdd.collect()
-    # print(len(coreset))
     centers = SequentialFFT(coreset, K)
     end = time.time()
     print(f"Running time of MRFFT Round 2 = {round((end - start) * 1000)} ms")
