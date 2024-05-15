@@ -52,6 +52,7 @@ def distance(p1, p2):
     return t0*t0 + t1*t1
 
 
+# Implementation of SequentialFFT. Complexity: O(|P| K)
 def SequentialFFT(P, K):
     if len(P) == 0:
         return []
@@ -59,8 +60,11 @@ def SequentialFFT(P, K):
     c_i = P[0]
     C = [c_i]
     # In distance_from_C we store the distances between each point in P
-    # and the set of centers selected up to the current step
-    # We use a numpy array to speed up the code as much as possible
+    # and the set of centers selected up to the current step.
+    # We use a numpy array to speed up the code as much as possible.
+    # In another context, we would have used a set instead of a numpy array,
+    # so to efficiently remove the selected centers (up to the current step) from it,
+    # but according to our tests, using a numpy array is twice as fast as using the set.
     distance_from_C = np.full(len(P), np.inf)
     distance_from_C[0] = 0.0
     for _ in range(2, K+1):
@@ -79,7 +83,7 @@ def MRFFT(P, K):
     # Round 1
     start = time.time()
     coreset_rdd = P.mapPartitions(lambda P_i: SequentialFFT(list(P_i), K)).cache()
-    coreset_rdd.count()
+    coreset_rdd.count()  # Materialize the RDD
     end = time.time()
     print(f"Running time of MRFFT Round 1 = {round((end - start) * 1000)} ms")
 
@@ -103,8 +107,6 @@ def MRFFT(P, K):
 conf = SparkConf().setAppName('G017HW2')
 conf.set("spark.locality.wait", "0s")
 sc = SparkContext(conf=conf)
-
-# random.seed(42)
 
 
 def main():
