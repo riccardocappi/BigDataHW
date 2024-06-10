@@ -20,18 +20,15 @@ def process_batch(time, batch):
         return
     remaining_items = THRESHOLD-streamLength[0]
     # Extract the distinct items from the batch
-    batch_list = batch.map(lambda x: int(x)).collect()
-
+    # batch_list = batch.map(lambda x: int(x)).collect()
+    batch_list = batch.collect()
+    batch_list = list(map(lambda x: int(x), batch_list))
     batch_list = batch_list[:remaining_items]
 
     # Update the streaming state
     exact_algorithm(batch_list)
     reservoir_sample(batch_list, streamLength[0])
     sticky_sampling(batch_list)
-
-    # If we wanted, here we could run some additional code on the global histogram
-    if batch_size > 0:
-        print("Batch size at time [{0}] is: {1}".format(time, batch_size))
 
     streamLength[0] += batch_size
     # stopping condition is met
@@ -65,6 +62,11 @@ def sticky_sampling(batch_list):
         elif random.random() < r/THRESHOLD:
             SSmap[item] = 1
 
+
+def print_freq_items(items, freq_items):
+    for item in items:
+        output = str(item) + ' +' if item in freq_items else str(item) + ' -'
+        print(output)
 
 
 if __name__ == '__main__':
@@ -146,6 +148,7 @@ if __name__ == '__main__':
     for key, value in histogram.items():
         if value >= phi*THRESHOLD:
             exact_frequent_items.append(key)
+    exact_frequent_items.sort()
     print(f"Number of true frequent items = {len(exact_frequent_items)}")
     print("True frequent items:")
     for fi in exact_frequent_items:
@@ -153,21 +156,18 @@ if __name__ == '__main__':
 
     # RESERVOIR SAMPLING
     estimated_freq_items = list(set(S))
+    estimated_freq_items.sort()
     print("RESERVOIR SAMPLING")
     print(f"Size m of the sample = {math.ceil(1 / phi)}")
     print(f"Number of estimated frequent items = {len(estimated_freq_items)}")
     print("Estimated frequent items:")
-    for item in estimated_freq_items:
-        output = str(item) + ' +' if item in exact_frequent_items else str(item) + ' -'
-        print(output)
+    print_freq_items(estimated_freq_items, exact_frequent_items)
 
     # STICKY SAMPLING
-
     sticky_sample = [k for k,v in SSmap.items() if v >= (phi-epsilon)*THRESHOLD]
+    sticky_sample.sort()
     print("STICKY SAMPLING")
     print(f"Number of items in the Hash Table = {len(SSmap)}")
     print(f"Number of estimated frequent items = {len(sticky_sample)}")
     print("Estimated frequent items:")
-    for item in sticky_sample:
-        output = str(item) + ' +' if item in exact_frequent_items else str(item) + ' -'
-        print(output)
+    print_freq_items(sticky_sample, exact_frequent_items)
