@@ -6,24 +6,18 @@ import sys
 import math
 import random
 
-# After how many items should we stop?
-n = -1 # To be set via command line
 
-
-# Operations to perform after receiving an RDD 'batch' at time 'time'
-def process_batch(time, batch):
-    # We are working on the batch at time `time`.
+def process_batch(batch):
     global streamLength
     batch_size = batch.count()
-    # If we already have enough points (> THRESHOLD), skip this batch.
+    # If we already have enough points (> n), skip this batch.
     if streamLength[0]>=n:
         return
     remaining_items = n - streamLength[0]
-    # Extract the distinct items from the batch
+
     batch_list = batch.map(lambda x: int(x)).collect()
     batch_list = batch_list[:remaining_items]
 
-    # Update the streaming state
     exact_algorithm(batch_list)
     reservoir_sampling(batch_list, streamLength[0])
     sticky_sampling(batch_list)
@@ -33,6 +27,7 @@ def process_batch(time, batch):
     if streamLength[0] >= n:
         stopping_condition.set()
 
+
 def exact_algorithm(batch_list):
     global frequency_map
     for item in batch_list:
@@ -41,18 +36,20 @@ def exact_algorithm(batch_list):
         else:
             frequency_map[item] += 1
 
-def reservoir_sampling(batch_list, t):
+
+def reservoir_sampling(batch_list, length):
     global reservoir_sample, phi
     m = math.ceil(1/phi)
     for i, item in enumerate(batch_list):
-        if len(reservoir_sample) <= m:
+        if len(reservoir_sample) < m:
             reservoir_sample.append(item)
-        elif random.random() <= (m / (t+i+1)):
+        elif random.random() <= (m / (length + i)):
             index = random.randint(0,m-1)
             reservoir_sample[index] = item
 
+
 def sticky_sampling(batch_list):
-    global sticky_sampling_map, phi, epsilon, delta
+    global sticky_sampling_map, phi, epsilon, delta, n
     r = math.log(1/(delta*phi))/epsilon
     for item in batch_list:
         if item in sticky_sampling_map:
@@ -68,7 +65,7 @@ def print_freq_items(items, freq_items):
 
 
 if __name__ == '__main__':
-    assert len(sys.argv) == 6, "USAGE: n, phi, epsilon, delta, portExp"
+    assert len(sys.argv) == 6, "USAGE: python G017HW3.py n, phi, epsilon, delta, portExp"
     conf = SparkConf().setMaster("local[*]").setAppName("G017HW3")
 
     sc = SparkContext(conf=conf)
@@ -93,12 +90,12 @@ if __name__ == '__main__':
 
     # CODE TO PROCESS AN UNBOUNDED STREAM OF DATA IN BATCHES
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
-    stream.foreachRDD(lambda time, batch: process_batch(time, batch))
+    stream.foreachRDD(lambda time, batch: process_batch(batch))
 
     # MANAGING STREAMING SPARK CONTEXT
     ssc.start()
     stopping_condition.wait()
-    ssc.stop(False, True)
+    ssc.stop(False, False)
 
     # EXACT ALGORITHM
     print("EXACT ALGORITHM")
@@ -117,7 +114,7 @@ if __name__ == '__main__':
     estimated_freq_items = list(set(reservoir_sample))
     estimated_freq_items.sort()
     print("RESERVOIR SAMPLING")
-    print(f"Size m of the sample = {math.ceil(1 / phi)}")
+    print(f"Size m of the sample = {len(reservoir_sample)}")
     print(f"Number of estimated frequent items = {len(estimated_freq_items)}")
     print("Estimated frequent items:")
     print_freq_items(estimated_freq_items, exact_frequent_items)
