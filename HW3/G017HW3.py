@@ -13,6 +13,7 @@ def process_batch(batch):
     # If we already have enough points (> n), skip this batch.
     if streamLength[0]>=n:
         return
+    # get the remaining number of items to process (all items after the n-th one should be ignored)
     remaining_items = n - streamLength[0]
 
     batch_list = batch.map(lambda x: int(x)).collect()
@@ -43,7 +44,7 @@ def reservoir_sampling(batch_list, length):
     for i, item in enumerate(batch_list):
         if len(reservoir_sample) < m:
             reservoir_sample.append(item)
-        elif random.random() <= (m / (length + i)):
+        elif random.random() <= (m / (length + i)): # update the m-sample with prob m/t
             index = random.randint(0,m-1)
             reservoir_sample[index] = item
 
@@ -58,6 +59,7 @@ def sticky_sampling(batch_list):
             sticky_sampling_map[item] = 1
 
 
+# Prints the estimated frequent items, adding  a "+" if the item is a true frequent one, and "-" otherwise
 def print_freq_items(items, freq_items):
     for item in items:
         output = str(item) + ' +' if item in freq_items else str(item) + ' -'
@@ -85,8 +87,8 @@ if __name__ == '__main__':
 
     streamLength = [0] # Stream length (an array to be passed by reference)
     frequency_map = {} # Hash Table for the exact_algorithm
-    reservoir_sample = []
-    sticky_sampling_map = {}
+    reservoir_sample = [] # m-sample for reservoir sample
+    sticky_sampling_map = {} # Hash Table for sticky sampling
 
     # CODE TO PROCESS AN UNBOUNDED STREAM OF DATA IN BATCHES
     stream = ssc.socketTextStream("algo.dei.unipd.it", portExp, StorageLevel.MEMORY_AND_DISK)
@@ -111,7 +113,7 @@ if __name__ == '__main__':
         print(fi)
 
     # RESERVOIR SAMPLING
-    estimated_freq_items = list(set(reservoir_sample))
+    estimated_freq_items = list(set(reservoir_sample)) # get the distinct items in the sample
     estimated_freq_items.sort()
     print("RESERVOIR SAMPLING")
     print(f"Size m of the sample = {len(reservoir_sample)}")
@@ -120,7 +122,7 @@ if __name__ == '__main__':
     print_freq_items(estimated_freq_items, exact_frequent_items)
 
     # STICKY SAMPLING
-    sticky_sample = [k for k,v in sticky_sampling_map.items() if v >= (phi - epsilon) * n]
+    sticky_sample = [k for k,v in sticky_sampling_map.items() if v >= (phi - epsilon) * n] # filter-out noise
     sticky_sample.sort()
     print("STICKY SAMPLING")
     print(f"Number of items in the Hash Table = {len(sticky_sampling_map)}")
