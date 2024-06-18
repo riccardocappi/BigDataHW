@@ -9,10 +9,10 @@ import random
 
 def process_batch(batch):
     global streamLength
-    batch_size = batch.count()
     # If we already have enough points (> n), skip this batch.
     if streamLength[0]>=n:
         return
+    batch_size = batch.count()
     # get the remaining number of items to process (all items after the n-th one should be ignored)
     remaining_items = n - streamLength[0]
 
@@ -122,7 +122,7 @@ if __name__ == '__main__':
     print_freq_items(estimated_freq_items, exact_frequent_items)
 
     # STICKY SAMPLING
-    sticky_sample = [k for k,v in sticky_sampling_map.items() if v >= (phi - epsilon) * n] # filter-out noise
+    sticky_sample = [k for k,v in sticky_sampling_map.items() if v >= int((phi - epsilon) * n)] # filter-out noise
     sticky_sample.sort()
     print("STICKY SAMPLING")
     print(f"Number of items in the Hash Table = {len(sticky_sampling_map)}")
